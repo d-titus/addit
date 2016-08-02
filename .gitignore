@@ -2,6 +2,7 @@
 *.csv
 *.ipynb
 *.pyc
+*.zip
 
 EXTR_accessory_V.csv
 EXTR_LookUp.csv
