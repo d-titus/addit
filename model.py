@@ -1,18 +1,20 @@
 from __future__ import division
 import numpy as np
 import pandas as pd
-from sklearn.cross_validation import train_test_split, KFold
+from sklearn.cross_validation import train_test_split  # , KFold
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.linear_model import LinearRegression
 import statsmodels.api as sm
-from sklearn.feature_selection import RFECV
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-df = pd.read_csv('test_categorical.csv')
+
+df = pd.read_csv('test.csv')
 control_regression = pd.read_csv('control_regression.csv')
-control_categorical = pd.read_csv('categorical_control.csv')
+control = pd.read_csv('control.csv')
 
 price = control_regression['sale_sale_price']
-# df.drop('sale_sale_price', axis='columns', inplace=True)
+df.drop('sale_sale_price', axis='columns', inplace=True)
 df.drop('parcel_parcel_number', axis='columns', inplace=True)
 
 ctrl_price = control_regression['sale_sale_price']
@@ -29,65 +31,86 @@ crx_train, crx_test, cry_train, cry_test = train_test_split(control_regression,
                                                             test_size=0.33,
                                                             random_state=1)
 
-ccx_train, ccx_test, ccy_train, ccy_test = train_test_split(control_categorical,
-                                                            ctrl_price,
-                                                            test_size=0.33,
-                                                            random_state=1)
+cx_train, cx_test, cy_train, cy_test = train_test_split(control,
+                                                        ctrl_price,
+                                                        test_size=0.33,
+                                                        random_state=1)
 
 
 def error(model, x, y):
-    # Mean
     error = 0
     prediction = model.predict(x)
-    for i in prediction:
-        if prediction[i] > y[i]:
-            error = np.abs(prediction[i] - y[i])/prediction[i]
-        else:
-            error = np.abs(prediction[i] - y[i])/y[i]
+    error = (np.abs(prediction - y)/np.minimum(prediction, y))
+    error = np.sum(error)/len(y)
     return error
 
 random_forest = RandomForestRegressor(max_features='sqrt', n_estimators=1000,
                                       oob_score=True, max_depth=6, n_jobs=-1)
 ols = LinearRegression(n_jobs=-1)
 boost = GradientBoostingRegressor(n_estimators=1000, learning_rate=0.1)
-sm_x_train = sm.add_constant(x_train)
 sm_ols = sm.OLS(y_train, x_train)
-ctrl_sm_ols = sm.OLS(cry_train, crx_train)
-rank_feats = RFECV(random_forest, cv=5)
+ctrl_sm_ols = sm.OLS(cy_train, cx_train)
 
-rank_feats.fit(x_train, y_train)
-rank_feats.score(x_test, y_test)
-rank_feats.get_params()
+
+# This takes > 12 hours to run with random forest, so... take that with a grain of salt
 
 random_forest.fit(x_train, y_train)
-random_forest.score(x_test, y_test)
-random_forest.oob_score_
+importance = random_forest.feature_importances_
+std = np.std([tree.feature_importances_ for tree in random_forest.estimators_], axis=0)
+idx = np.argsort(importance)[::-1]
+features_to_keep = idx[importance > np.mean(importance)]
+features_to_keep.shape
+features = x_train[idx[features_to_keep]]
+reduced_x_test = x_test[idx[features_to_keep]]
 
-random_forest.fit(ccx_train, ccy_train)
-random_forest.score(ccx_test, ccy_test)
-random_forest.oob_score_
+random_forest.fit(features, y_train)
+random_forest.score(reduced_x_test, y_test)
+error(random_forest, reduced_x_test, y_test)
+
+print('Feature ranking:')
+for f in xrange(x_train.shape[1]):
+    print("%d. %s (%f)" % (f + 1, x_train.columns[f], importance[idx[f]]))
+
+plt.figure(figsize=(12, 12))
+plt.title('Feature importances')
+plt.bar(xrange(x_train.shape[1]), importance[idx], align='center', color='b', yerr=std[idx])
+plt.show()
+
+
+error(random_forest, x_test, y_test)
+
+random_forest.fit(cx_train, cy_train)
+error(random_forest, cx_test, cy_test)
 
 random_forest.fit(crx_train, cry_train)
-random_forest.score(crx_test, cry_test)
-random_forest.oob_score_
+error(random_forest, crx_test, cry_test)
 
-# # SKlearn OLS
-# ols.fit(x_train, y_train)
-# ols.score(x_test, y_test)
-# ols.fit(crx_train, cry_train)
-# ols.score(crx_test, cry_test)
-# ols.fit(ccx_train, ccy_train)
-# ols.score(ccx_test, ccy_test)
-# 
+# SKlearn OLS
+ols.fit(x_train, y_train)
+error(ols, x_test, y_test)
+ols.fit(crx_train, cry_train)
+error(ols, crx_test, cry_test)
+ols.fit(cx_train, cy_train)
+error(ols, cx_test, cy_test)
+#
 # boost.fit(crx_train, cry_train)
 # boost.score(crx_test, cry_test)
 #
-# boost.fit(x_train, y_train)
-# boost.score(x_test, y_test)
-#
-# # SM OLS
-# sm_fit = sm_ols.fit()
-# print(sm_fit.summary2())
-#
-# ctrl_sm_fit = ctrl_sm_ols.fit()
-# print(ctrl_sm_fit.summary2())
+boost.fit(features, y_train)
+boost.score(reduced_x_test, y_test)
+error(boost, reduced_x_test, y_test)
+
+boost.fit(cx_train, cy_train)
+
+error(boost, cx_test, cy_test)
+
+
+# SM OLS
+sm_fit = sm_ols.fit()
+print(sm_fit.summary2())
+
+ctrl_sm_fit = ctrl_sm_ols.fit()
+print(ctrl_sm_fit.summary2())
+
+ctrl_cat_sm_fit = ctrl_cat_sm_ols.fit()
+print (ctrl_cat_sm_fit.summary2())
