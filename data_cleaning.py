@@ -174,24 +174,26 @@ cols_to_features = ['parcel_access_type',
                     'sale_sale_type'
                     ]
 
-sales_dummies = pd.get_dummies(sales, columns=cols_to_features, dummy_na=True,
-                               drop_first=True)
+# experimenting with dropping all features except LUDescription
+
+# sales_dummies = pd.get_dummies(sales, columns=cols_to_features, dummy_na=True,
+#                               drop_first=True)
 
 drop_cols(cols_to_features, sales)
 
-sales.to_csv('control_regression.csv')
+sales.to_csv('control.csv')
 
 (sales['parcel_parcel_number'].str.len()).min()
 
-regression_cols = sales.columns
+# regression_cols = sales.columns
 
-drop_cols(regression_cols, sales_dummies)
+# drop_cols(regression_cols, sales_dummies)
 
 # (Make control data set to see whether extra features improve the model)
 
-sales_dummies.to_csv('control_categorical.csv')
+# sales_dummies.to_csv('control_categorical.csv')
 
-sales_dummies['parcel_parcel_number'] = sales['parcel_parcel_number']
+# sales_dummies['parcel_parcel_number'] = sales['parcel_parcel_number']
 
 # (--------------- Accessory and Lookup merge and preclean -------------------)
 # Concating the unique identifers so that they can be merged into main file
@@ -223,15 +225,19 @@ lookup = lookup.drop('LUType', axis=1)
 acc = pd.merge(lookup, acc, left_on='LUItem', right_on='AccyType')
 acc = acc.drop('LUItem', axis=1)
 
-sales_dummies = pd.merge(sales_dummies, acc, on='parcel_parcel_number', how='left')
+# sales_dummies = pd.merge(sales_dummies, acc, on='parcel_parcel_number', how='left')
+
+sales = pd.merge(sales, acc, on='parcel_parcel_number', how='left')
 
 cols_in_sales_only = ['AccyType', 'AccyDescr']
-drop_cols(cols_in_sales_only, sales_dummies)
+# drop_cols(cols_in_sales_only, sales_dummies)
+drop_cols(cols_in_sales_only, sales)
 
 acc_features = ['LUDescription']
-sales_dummies = pd.get_dummies(sales_dummies, columns=acc_features, dummy_na=True, drop_first=True)
-
+# sales_dummies = pd.get_dummies(sales_dummies, columns=acc_features, dummy_na=True, drop_first=True)
+sales = pd.get_dummies(sales, columns=acc_features, dummy_na=True, drop_first=True)
 # (------Pivot talbe set up to deal with duplicate parcel numbers-----)
-sales_dummies = sales_dummies.pivot_table(sales_dummies, index=['parcel_parcel_number'], aggfunc='sum')
+# sales_dummies = sales_dummies.pivot_table(sales_dummies, index=['parcel_parcel_number'], aggfunc='sum')
+sales = sales.pivot_table(sales, index=['parcel_parcel_number'], aggfunc='sum')
 
-sales_dummies.to_csv('test_categorical.csv')
+sales.to_csv('test.csv')
