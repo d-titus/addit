@@ -61,6 +61,7 @@ def get_first(i):
 # Output: output column with last value of list
 
 
+
 # (--------------------------Sales cleaning-----------------------------------)
 
 # (---------Remove non existant parcel_parcel_numbers -----------------------)
@@ -70,6 +71,7 @@ for letter in letters:
     sales = sales[sales['parcel_parcel_number'].str.contains(letter) == False]
 
 sales['parcel_parcel_number'].dropna(inplace=True)
+
 
 # Remove all plexes and 'other' structure types
 structure_type_removal = ['Other', 'Duplex', 'Triplex', 'Fourplex', 'Fiveplex']
@@ -111,10 +113,8 @@ remove_cols = ['is_flip',
                'street_distances',
                'sale_pending_dates',
                'structure_square_feet_finished',
-               'parcel_lot_square_feet',
                'parcel_assessment_sub_area',
-               'structure_square_feet_garage',
-               'parcel_parking_count_covered',
+               'parcel_lot_square_feet',
                # 'structure_quality',
                # 'structure_bathrooms'
                ]
@@ -137,16 +137,16 @@ drop_cols(cols_to_investigate, sales)
 cols_with_nan_to_zero = ['parcel_waterfront_footage',
                          'structure_square_feet_basement_finished',
                          'structure_square_feet_basement_unfinished',
-                         # 'structure_square_feet_garage',
+                         'structure_square_feet_garage',
                          'structure_square_feet_decking']
 
 cols_with_nan_to_med = ['structure_floors',
                         'parcel_mls_area',
-                        # 'parcel_parking_count_covered',
+                        'parcel_parking_count_covered',
                         'structure_quality',
                         # 'parcel_lot_square_feet',
                         'street_score',
-                        # 'structure_square_feet_finished'
+                        #'structure_square_feet_finished'
                         ]
 
 cols_with_nan_to_mean = ['parcel_block_group_pp_sqft',
@@ -170,17 +170,28 @@ cols_to_features = ['parcel_access_type',
                     'structure_hvac',
                     'structure_siding_cover',
                     'structure_roof_cover',
+                    'sale_sale_deed',
+                    'sale_sale_type'
                     ]
 
-cols_to_features_investigate = ['sale_sale_deed',
-                                'sale_sale_type',
-                                ]
+sales_dummies = pd.get_dummies(sales, columns=cols_to_features, dummy_na=True,
+                               drop_first=True)
 
-sales = pd.get_dummies(sales, columns=cols_to_features, dummy_na=True,
-                       drop_first=True)
+drop_cols(cols_to_features, sales)
 
-sales.to_csv('control.csv')
+sales.to_csv('control_regression.csv')
 
+(sales['parcel_parcel_number'].str.len()).min()
+
+regression_cols = sales.columns
+
+drop_cols(regression_cols, sales_dummies)
+
+# (Make control data set to see whether extra features improve the model)
+
+sales_dummies.to_csv('control_categorical.csv')
+
+sales_dummies['parcel_parcel_number'] = sales['parcel_parcel_number']
 
 # (--------------- Accessory and Lookup merge and preclean -------------------)
 # Concating the unique identifers so that they can be merged into main file
@@ -200,7 +211,7 @@ acc_drop_list = ['Major',
                  'Size',
                  'Unit',
                  'Grade',
-                 # 'AccyValue',
+                 'AccyValue',
                  'PcntNetCondition']
 
 drop_cols(acc_drop_list, acc)
@@ -212,16 +223,15 @@ lookup = lookup.drop('LUType', axis=1)
 acc = pd.merge(lookup, acc, left_on='LUItem', right_on='AccyType')
 acc = acc.drop('LUItem', axis=1)
 
-sales = pd.merge(sales, acc, on='parcel_parcel_number', how='left')
+sales_dummies = pd.merge(sales_dummies, acc, on='parcel_parcel_number', how='left')
 
 cols_in_sales_only = ['AccyType', 'AccyDescr']
-drop_cols(cols_in_sales_only, sales)
+drop_cols(cols_in_sales_only, sales_dummies)
 
 acc_features = ['LUDescription']
-sales = pd.get_dummies(sales, columns=acc_features, dummy_na=True, drop_first=True)
-
+sales_dummies = pd.get_dummies(sales_dummies, columns=acc_features, dummy_na=True, drop_first=True)
 
 # (------Pivot talbe set up to deal with duplicate parcel numbers-----)
-sales = sales.pivot_table(sales, index=['parcel_parcel_number'], aggfunc='sum')
+sales_dummies = sales_dummies.pivot_table(sales_dummies, index=['parcel_parcel_number'], aggfunc='sum')
 
-sales.to_csv('test.csv')
+sales_dummies.to_csv('test_categorical.csv')
